@@ -129,4 +129,4 @@ class LogConfig:
     wandb_project_name: str = "project_name"
     wandb_exp_name: str = "exp_name"
     log_file: str = "./test.log"
-    log_interval: int = 5
+    log_interval: int = 50

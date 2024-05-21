@@ -35,6 +35,8 @@ from slam_llm.utils.train_utils import (
     clear_gpu_cache,
     get_policies
 )
+from slam_llm.models.slam_model import model_factory
+
 
 import sys
 import logging
@@ -145,7 +147,7 @@ def main(kwargs: DictConfig):
             wandb.init(dir=log_config.wandb_dir, entity=log_config.wandb_entity_name, project=log_config.wandb_project_name,name=log_config.wandb_exp_name ,config=wandb_config)
 
 
-    model_factory = get_custom_model_factory(model_config, logger)
+    # model_factory = get_custom_model_factory(model_config, logger)
     model, tokenizer = model_factory(train_config, model_config, **kwargs)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

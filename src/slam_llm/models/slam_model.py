@@ -41,7 +41,8 @@ def model_factory(train_config, model_config, **kwargs):
         **kwargs,
     )
 
-    ckpt_path = kwargs.get("ckpt_path", None) #FIX(MZY): load model ckpt(mainly projector, related to model_checkpointing/checkpoint_handler.py: save_model_checkpoint_peft)
+    ckpt_path = model_config.ckpt_path #FIX(MZY): load model ckpt(mainly projector, related to model_checkpointing/checkpoint_handler.py: save_model_checkpoint_peft)
+
     if ckpt_path is not None:
             logger.info("loading other parts from: {}".format(ckpt_path))
             ckpt_dict = torch.load(ckpt_path, map_location="cpu")

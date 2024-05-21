@@ -1,8 +1,14 @@
 #!/bin/bash
 # export PYTHONPATH=/root/whisper:$PYTHONPATH
+export PATH=$PATH:/usr/local/cuda-11.8/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.8/lib64
+export CUDA_HOME=/usr/local/cuda-11.8
+
+
 export PYTHONPATH=/root/fairseq:$PYTHONPATH
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4
 export TOKENIZERS_PARALLELISM=false
+export WANDB_API_KEY=7291c67639a70b6aff97fede6add8b8516c7e079
 # export CUDA_LAUNCH_BLOCKING=1
 export OMP_NUM_THREADS=1
 
@@ -21,10 +27,11 @@ llm_path=/home/yxdu/hit/speech/models/Meta-Llama-3-8B-Instruct
 train_data_path=/home/yxdu/hit/speech/data/common/4/en/train.jsonl
 val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
-output_dir=/home/yxdu/hit/speech/output/asr-largev3-qformer-lama3-521
+output_dir=/home/yxdu/hit/speech/output/asr-largev3-qformer-lama3-522
+checkpoint_dir=/home/yxdu/hit/speech/output/asr-largev3-qformer-lama3-521
 
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
-latest_file=$(find "$output_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
+latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
 # 检查是否找到了文件
 if [[ -n "$latest_file" ]]; then
@@ -67,12 +74,12 @@ hydra.run.dir=$output_dir \
 ++train_config.warmup_steps=1000 \
 ++train_config.total_steps=1000000 \
 ++train_config.lr=1e-4 \
-++train_config.validation_interval=1000 \
-++train_config.batch_size_training=6 \
-++train_config.val_batch_size=6 \
+++train_config.batch_size_training=4 \
+++train_config.val_batch_size=4 \
 ++train_config.num_workers_dataloader=8 \
 ++train_config.output_dir=$output_dir \
 ++metric=acc \
+++train_config.use_fp16=false \
 "
 
 
@@ -96,8 +103,11 @@ else
         --config-name "prompt.yaml" \
         ++train_config.enable_fsdp=false \
         ++train_config.enable_ddp=true \
-        ++train_config.use_fp16=false \
         ++fsdp_config.pure_bf16=true \
+        ++log_config.use_wandb=false \
+        ++log_config.wandb_project_name=SLAM \
+        ++train_config.validation_interval=5000 \
+        ++model_config.ckpt_path=$ckpt_name \
         $hydra_args
 fi
-        # ++model_config.ckpt_path=$ckpt_name \
+        
