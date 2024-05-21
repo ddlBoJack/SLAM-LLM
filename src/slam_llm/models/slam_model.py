@@ -310,8 +310,9 @@ class slam_model(nn.Module):
         if audio_mel is not None or audio is not None or visual is not None:
             if self.train_config.freeze_encoder: # freeze encoder
                 self.encoder.eval()
-
-            if self.model_config.encoder_name == "whisper":
+            if self.model_config.encoder_path_hf is not None:
+                encoder_outs = self.encoder(audio_mel.permute(0, 2, 1)) # bs*seq*dim
+            elif self.model_config.encoder_name == "whisper":
                 encoder_outs = self.encoder.extract_variable_length_features(audio_mel.permute(0, 2, 1)) # bs*seq*dim
             if self.model_config.encoder_name == "beats":
                 encoder_outs, audio_mel_post_mask = self.encoder.extract_features(audio_mel, audio_mel_mask) # bs*seq*dim

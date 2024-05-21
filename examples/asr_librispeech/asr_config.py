@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Optional, List
+from torch.distributed.fsdp import ShardingStrategy
+from torch.distributed.fsdp.fully_sharded_data_parallel import StateDictType
+
 @dataclass
 class ModelConfig:
     file: str = "examples/asr_librispeech/model/slam_model_asr.py:model_factory"
@@ -7,6 +10,7 @@ class ModelConfig:
     llm_path: str = "PATH/to/LLAMA/7B"
     llm_type: str = "decoder_only"
     llm_dim: int = 4096
+    encoder_path_hf: Optional[str] = None
     encoder_name: Optional[str] = None
     encoder_ds_rate: int = 2
     encoder_path: Optional[str] = None
@@ -20,6 +24,7 @@ class ModelConfig:
     encoder_type: str = field(default="finetune", metadata={
         "help": "whether model is only pretrained or finetuned, used for models such as hubert"
     })
+    ckpt_path: Optional[str] = None
 
 @dataclass
 class PeftConfig:
@@ -102,14 +107,15 @@ class DataConfig:
     normalize: Optional[bool] = field(default=False, metadata={
         "help": "whether input is normalized, used for models such as wavlm"
     })
+    bf16:bool = False
 
 @dataclass
 class FSDPConfig:
     mixed_precision: bool = True
     use_fp16: bool = False
+    sharding_strategy: ShardingStrategy = ShardingStrategy.FULL_SHARD # HYBRID_SHARD "Full Shard within a node DDP cross Nodes", SHARD_GRAD_OP "Shard only Gradients and Optimizer States", NO_SHARD "Similar to DDP".
     # sharding_strategy = "FULL_SHARD" #ShardingStrategy = ShardingStrategy.FULL_SHARD
-    sharding_strategy: str = "NO_SHARD" #ShardingStrategy.NO_SHARD #MZY: set NO_SHARD when use DDP
-    checkpoint_type: str = "SHARDED_STATE_DICT"  # alternatively can use SHARDED_STATE_DICT save one file per rank, and can resize the world-size.
+    checkpoint_type: StateDictType = StateDictType.SHARDED_STATE_DICT  # alternatively can use SHARDED_STATE_DICT save one file per rank, and can resize the world-size.
     fsdp_activation_checkpointing: bool = True
     fsdp_cpu_offload: bool = False
     pure_bf16: bool = False
@@ -118,9 +124,9 @@ class FSDPConfig:
 @dataclass
 class LogConfig:
     use_wandb: bool = False
-    wandb_dir: str = "/root/test_wandb"
-    wandb_entity_name: str = "project_name"
+    wandb_dir: str = "./test_wandb"
+    wandb_entity_name: str = "nlpcc"
     wandb_project_name: str = "project_name"
     wandb_exp_name: str = "exp_name"
-    log_file: str = "/root/test.log"
+    log_file: str = "./test.log"
     log_interval: int = 5

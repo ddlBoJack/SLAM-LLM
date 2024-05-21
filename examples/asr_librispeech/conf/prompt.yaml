@@ -1,4 +1,4 @@
 dataset_config:
     # we put prompt here, because the hydra override in shell script only support a small subset of chars
     # prompt: "Transcribe speech to text. Output the transcription directly without redundant content. Ensure that the output is not duplicated. "
-    prompt: "Transcribe speech to text. "
+    prompt: "<en>"

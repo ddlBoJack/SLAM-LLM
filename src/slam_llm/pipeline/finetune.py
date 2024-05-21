@@ -153,14 +153,15 @@ def main(kwargs: DictConfig):
     # Convert the model to bfloat16 if fsdp and pure_bf16 is enabled
     if (train_config.enable_fsdp or train_config.enable_ddp) and fsdp_config.pure_bf16:
         model.to(torch.bfloat16)
+        dataset_config["bf16"]=True
 
     #setting up FSDP if enable_fsdp is enabled
     if train_config.enable_fsdp:
         if not train_config.use_peft and train_config.freeze_layers:
 
             freeze_transformer_layers(train_config.num_freeze_layers)
-        from torch.distributed.fsdp import ShardingStrategy
-        fsdp_config.sharding_strategy = getattr(ShardingStrategy, fsdp_config.sharding_strategy)
+        # from torch.distributed.fsdp import ShardingStrategy
+        # fsdp_config.sharding_strategy = getattr(ShardingStrategy, fsdp_config.sharding_strategy)
         mixed_precision_policy, wrapping_policy = get_policies(fsdp_config, rank)
         my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
 
@@ -216,6 +217,7 @@ def main(kwargs: DictConfig):
         dataset_train,
         num_workers=train_config.num_workers_dataloader,
         pin_memory=True,
+        prefetch_factor=10,
         **train_dl_kwargs,
     )
 
@@ -230,6 +232,7 @@ def main(kwargs: DictConfig):
             dataset_val,
             num_workers=train_config.num_workers_dataloader,
             pin_memory=True,
+            prefetch_factor=10,
             **val_dl_kwargs,
         )
 
