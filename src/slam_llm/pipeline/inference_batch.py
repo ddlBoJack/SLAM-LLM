@@ -15,6 +15,7 @@ from slam_llm.utils.dataset_utils import get_preprocessed_dataset
 import os
 import logging
 from tqdm import tqdm
+from slam_llm.models.slam_model import model_factory
 
 import hydra
 from omegaconf import DictConfig, ListConfig, OmegaConf
@@ -96,9 +97,11 @@ def main(kwargs: DictConfig):
 	torch.manual_seed(train_config.seed)
 	random.seed(train_config.seed)
 	
-	model_factory = get_custom_model_factory(model_config, logger)
+	# model_factory = get_custom_model_factory(model_config, logger)
 	model, tokenizer = model_factory(train_config, model_config, **kwargs)
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # FIX(MZY): put the whole model to device.
+	model.to(torch.bfloat16)
+	dataset_config["bf16"]=True
 	model.to(device)
 	model.eval()
 
@@ -119,6 +122,7 @@ def main(kwargs: DictConfig):
 			shuffle=False,
             batch_size=train_config.val_batch_size,
 			drop_last=False,
+			prefetch_factor=1000,
 			collate_fn=dataset_test.collator
         )
 	
@@ -133,6 +137,8 @@ def main(kwargs: DictConfig):
 			model_outputs = model.generate(**batch)
 			output_text = model.tokenizer.batch_decode(model_outputs, add_special_tokens=False, skip_special_tokens=True)
 			for key, text, target in zip(batch["keys"], output_text, batch["targets"]):
+				print(key,text)
+				print(key,target)
 				pred.write(key + "\t" + text.replace("\n", " ") + "\n")
 				gt.write(key + "\t" + target + "\n")
 

@@ -22,14 +22,14 @@ cd $run_dir
 code_dir=examples/asr_librispeech
 
 speech_encoder_path=/home/yxdu/hit/speech/models/whisper/large-v3.pt
-encoder_path_hf=/home/yxdu/hit/speech/models/whisper-large-v3
-llm_path=/home/yxdu/hit/speech/models/Meta-Llama-3-8B-Instruct
+encoder_path_hf=/home/yxdu/hit/speech/models/whisper-large-v2
+llm_path=/home/yxdu/hit/speech/models/Qwen1.5-7B
 train_data_path=/home/yxdu/hit/speech/data/common/4/en/train.jsonl
 val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
-output_dir=/home/yxdu/hit/speech/output/asr-largev3-qformer-lama3-522
-checkpoint_dir=/home/yxdu/hit/speech/output/asr-largev3-qformer-lama3-521
 
+checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-only-524-4
+output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-525
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
 latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
@@ -41,7 +41,7 @@ if [[ -n "$latest_file" ]]; then
     # ckpt_name=/home/yxdu/hit/speech/output/st-lama3-asr/asr/6/model_202405130533_1539.pt
     echo $ckpt_name
 else
-    echo "No .pt files found in $output_dir."
+    echo "No .pt files found in $checkpoint_dir."
 fi
 
 
@@ -51,7 +51,7 @@ fi
 
 hydra_args="
 hydra.run.dir=$output_dir \
-++model_config.llm_name=Meta-Llama-3-8B-Instruct \
+++model_config.llm_name=Qwen \
 ++model_config.llm_path=$llm_path \
 ++model_config.llm_dim=4096 \
 ++model_config.encoder_name=whisper \
@@ -64,18 +64,19 @@ hydra.run.dir=$output_dir \
 ++dataset_config.train_data_path=$train_data_path \
 ++dataset_config.val_data_path=$val_data_path \
 ++dataset_config.input_type=mel \
-++dataset_config.mel_size=128 \
+++dataset_config.mel_size=80 \
 ++dataset_config.fix_length_audio=80 \
 ++train_config.model_name=asr \
-++train_config.num_epochs=3 \
+++train_config.num_epochs=10 \
 ++train_config.freeze_encoder=true \
 ++train_config.freeze_llm=true \
 ++train_config.batching_strategy=custom \
+++train_config.gradient_accumulation_steps=1 \
 ++train_config.warmup_steps=1000 \
 ++train_config.total_steps=1000000 \
-++train_config.lr=1e-4 \
+++train_config.lr=1e-5 \
 ++train_config.batch_size_training=4 \
-++train_config.val_batch_size=4 \
+++train_config.val_batch_size=8 \
 ++train_config.num_workers_dataloader=8 \
 ++train_config.output_dir=$output_dir \
 ++metric=acc \
@@ -104,9 +105,10 @@ else
         ++train_config.enable_fsdp=false \
         ++train_config.enable_ddp=true \
         ++fsdp_config.pure_bf16=true \
-        ++log_config.use_wandb=false \
+        ++log_config.use_wandb=true \
         ++log_config.wandb_project_name=SLAM \
         ++train_config.validation_interval=5000 \
+        ++train_config.use_peft=false \
         ++model_config.ckpt_path=$ckpt_name \
         $hydra_args
 fi

@@ -94,6 +94,8 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
             total_acc = 0.0
             total_length = len(train_dataloader)//gradient_accumulation_steps
             pbar = tqdm(colour="blue", desc=f"Training Epoch: {epoch+1}", total=total_length, dynamic_ncols=True)
+
+
             for step, batch in enumerate(train_dataloader):
                 for key in batch.keys():
                     if train_config.enable_fsdp or train_config.enable_ddp:

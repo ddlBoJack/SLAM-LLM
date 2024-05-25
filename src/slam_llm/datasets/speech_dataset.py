@@ -46,15 +46,17 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
         # ]
         self.prompt_library = [
             "<en>",
+            "<de>",
+            "<cn>",
             "<en><en>",
-            "<en><cn>",
             "<en><ja>",
-            "<en><de>",
             "<en><fr>",
             "<en><it>",
             "<en><qa>",
         ]
-        self.prompt_template = "USER: {}\n ASSISTANT:"
+        self.prompt_template = "<|im_start|>user:\n{}<|im_end|>\n<|im_start|>assistant\n"
+        # self.prompt_template = "USER: {}\nASSISTANT:"
+
         self.answer_template = "{}"
         self.fix_length_audio = dataset_config.get("fix_length_audio", -1)
         self.inference_mode = dataset_config.get("inference_mode", False)
@@ -98,8 +100,11 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
         data_dict = self.data_list[index]
         audio_path = data_dict.get("source")
         en = data_dict.get("en", None)
+        cn = data_dict.get("zh-CN", None)
+        # de = data_dict.get("de", None)
         task = data_dict.get("prompt", "ASR")
-        key = data_dict.get("key", None)
+        multask = data_dict.get("task")
+        key = data_dict.get("key", str(index))
 
         audio_raw = whisper.load_audio(audio_path)
         if self.input_type == "raw":
@@ -123,10 +128,27 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
         audio_pseudo = torch.full((audio_length,), -1) # placeholder
 
         
-        # prompt = self.prompt_template.format(prompt)
-        prompt = self.prompt_library[0]
-        target = en
 
+        # prompt = self.prompt_library[0]
+        # target = en
+        if multask == 0:
+            prompt = "<|startoftranscript|><|en|><|transcribe|><|en|><|wo_itn|>'"
+            target = en
+        elif multask == 1:
+            prompt = self.prompt_library[1]+en
+            target = en + "<de>"+de
+        else:
+            # prompt = self.prompt_library[1]
+            # target = en + "<de>"+de
+            # prompt = self.prompt_library[2]
+            # target = cn
+            prompt = "<|zh|>"
+            target = cn
+
+        # prompt = self.prompt_template.format(prompt)
+
+        # print(prompt)
+        # print(target)
 
 
         prompt_ids = self.tokenizer.encode(prompt)

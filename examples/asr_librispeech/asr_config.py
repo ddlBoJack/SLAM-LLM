@@ -50,7 +50,7 @@ class TrainConfig:
         "help":"alternative: padding"
     }) #
     context_length:int = 4096
-    gradient_accumulation_steps:int = 1
+    gradient_accumulation_steps:int = 4
     num_epochs:int = 3
     num_workers_dataloader:int = 1
     warmup_steps:int = 1000
