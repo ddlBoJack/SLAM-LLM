@@ -50,14 +50,14 @@ class TrainConfig:
         "help":"alternative: padding"
     }) #
     context_length:int = 4096
-    gradient_accumulation_steps:int = 4
+    gradient_accumulation_steps:int = 1
     num_epochs:int = 3
     num_workers_dataloader:int = 1
     warmup_steps:int = 1000
     total_steps:int = 100000
     validation_interval:int = 1000
     lr:float = 1e-4
-    weight_decay:float = 0.0
+    weight_decay:float = 0.01
     gamma:float = 0.85
     seed:int = 42
     use_fp16:bool = False
@@ -114,6 +114,7 @@ class FSDPConfig:
     mixed_precision: bool = True
     use_fp16: bool = False
     sharding_strategy: ShardingStrategy = ShardingStrategy.FULL_SHARD # HYBRID_SHARD "Full Shard within a node DDP cross Nodes", SHARD_GRAD_OP "Shard only Gradients and Optimizer States", NO_SHARD "Similar to DDP".
+    # sharding_strategy: ShardingStrategy = ShardingStrategy.NO_SHARD # HYBRID_SHARD "Full Shard within a node DDP cross Nodes", SHARD_GRAD_OP "Shard only Gradients and Optimizer States", NO_SHARD "Similar to DDP".
     # sharding_strategy = "FULL_SHARD" #ShardingStrategy = ShardingStrategy.FULL_SHARD
     checkpoint_type: StateDictType = StateDictType.SHARDED_STATE_DICT  # alternatively can use SHARDED_STATE_DICT save one file per rank, and can resize the world-size.
     fsdp_activation_checkpointing: bool = True

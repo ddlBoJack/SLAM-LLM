@@ -160,12 +160,13 @@ def main(kwargs: DictConfig):
     #setting up FSDP if enable_fsdp is enabled
     if train_config.enable_fsdp:
         if not train_config.use_peft and train_config.freeze_layers:
-
             freeze_transformer_layers(train_config.num_freeze_layers)
         # from torch.distributed.fsdp import ShardingStrategy
         # fsdp_config.sharding_strategy = getattr(ShardingStrategy, fsdp_config.sharding_strategy)
         mixed_precision_policy, wrapping_policy = get_policies(fsdp_config, rank)
         my_auto_wrapping_policy = fsdp_auto_wrap_policy(model, LlamaDecoderLayer)
+
+
 
         model = FSDP(
             model,
@@ -178,6 +179,7 @@ def main(kwargs: DictConfig):
             sync_module_states=train_config.low_cpu_fsdp,
             param_init_fn=lambda module: module.to_empty(device=torch.device("cuda"), recurse=False)
             if train_config.low_cpu_fsdp and rank != 0 else None,
+            use_orig_params=False
         )
         if fsdp_config.fsdp_activation_checkpointing:
             apply_fsdp_checkpointing(model)
@@ -254,15 +256,16 @@ def main(kwargs: DictConfig):
             lr=train_config.lr,
             weight_decay=train_config.weight_decay,
         )
-    # scheduler = StepLR(optimizer, step_size=1, gamma=train_config.gamma)
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer, 
-        lr_lambda=lambda step: (
-            min(step / train_config.warmup_steps, 1) if step < train_config.warmup_steps
-            else  max(0.0, 1 - (step - train_config.warmup_steps) / (train_config.total_steps - train_config.warmup_steps))
-            # else 1
-        )
-    )
+    
+    scheduler = StepLR(optimizer, step_size=15000, gamma=train_config.gamma)
+    # scheduler = torch.optim.lr_scheduler.LambdaLR(
+    #     optimizer, 
+    #     lr_lambda=lambda step: (
+    #         min(step / train_config.warmup_steps, 1) if step < train_config.warmup_steps
+    #         else  max(0.0, 1 - (step - train_config.warmup_steps) / (train_config.total_steps - train_config.warmup_steps))
+    #         # else 1
+    #     )
+    # )
 
     # Start the training process
     results = train(
