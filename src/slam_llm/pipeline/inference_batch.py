@@ -133,8 +133,8 @@ def main(kwargs: DictConfig):
 	preds = []
 	gts = []
 	
-	import evaluate
-	metric= evaluate.load("sacrebleu")
+	import sacrebleu
+
 	ave_bleu = 0.0
 	all_bleu = 0.0
 	count =1
@@ -162,16 +162,16 @@ def main(kwargs: DictConfig):
 				preds.append(text)
 				gts.append([target])
 			
-			tmp_result = metric.compute(predictions=tmp_preds, references=tmp_gts,tokenize="zh")
+			tmp_result = sacrebleu.corpus_bleu(tmp_preds, tmp_gts,tokenize="zh")
 			print(tmp_result)
 
 			
-			all_bleu +=tmp_result["score"]
+			all_bleu +=tmp_result.score
 			ave_bleu = (all_bleu/count)
 			count +=1
 			print("ave_bleu:"+str(ave_bleu))
 
-		result = metric.compute(predictions=preds, references=gts,tokenize="zh")
+		result = sacrebleu.corpus_bleu(preds, gts,tokenize="zh")
 		print(result)
 
 

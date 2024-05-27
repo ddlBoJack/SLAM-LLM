@@ -427,7 +427,7 @@ class slam_model(nn.Module):
             inputs_embeds=inputs_embeds,
             # max_length=kwargs.get("max_length", 200),
             max_new_tokens=kwargs.get("max_new_tokens", 50),
-            # num_beams=kwargs.get("num_beams", 4),
+            num_beams=kwargs.get("num_beams", 4),
             do_sample=False,
             min_new_tokens=1,
             top_p=1,

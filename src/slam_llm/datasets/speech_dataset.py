@@ -101,7 +101,7 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
         data_dict = self.data_list[index]
         audio_path = data_dict.get("source")
         en = data_dict.get("en", None)
-        # cn = data_dict.get("zh-CN", None)
+        cn = data_dict.get("zh-CN", None)
         de = data_dict.get("de", None)
         task = data_dict.get("prompt", "ASR")
         multask = data_dict.get("task")
@@ -143,8 +143,8 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
             # target = en + "<de>"+de
             # prompt = self.prompt_library[2]
             # target = cn
-            prompt = "<|de|>"
-            target = de
+            prompt = "<|zh|>"
+            target = cn
 
         # prompt = self.prompt_template.format(prompt)
 

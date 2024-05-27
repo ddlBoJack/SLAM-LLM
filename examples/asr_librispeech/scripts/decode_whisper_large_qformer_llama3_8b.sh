@@ -1,17 +1,17 @@
 #!/bin/bash
 #export PYTHONPATH=/root/whisper:$PYTHONPATH
-export PATH=$PATH:/usr/local/cuda-11.8/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.8/lib64
-export CUDA_HOME=/usr/local/cuda-11.8
+# export PATH=$PATH:/usr/local/cuda-11.8/bin
+# export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.8/lib64
+# export CUDA_HOME=/usr/local/cuda-11.8
 
 
-export PYTHONPATH=/root/fairseq:$PYTHONPATH
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4
+# export PYTHONPATH=/root/fairseq:$PYTHONPATH
+# export CUDA_VISIBLE_DEVICES=0,1,2,3,4
 export TOKENIZERS_PARALLELISM=false
 export WANDB_API_KEY=7291c67639a70b6aff97fede6add8b8516c7e079
 # export CUDA_LAUNCH_BLOCKING=1
 export OMP_NUM_THREADS=1
-
+export HYDRA_FULL_ERROR=1
 # debug setting for multiple gpus
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=ALL
@@ -29,7 +29,7 @@ val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
 
 checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu
-output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu
+output_dir=/home/yxdu/hit/speech/bleu_output
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
 latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
