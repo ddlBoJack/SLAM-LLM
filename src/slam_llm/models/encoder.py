@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from transformers import WhisperModel
+import whisper
 
 class WhisperWrappedEncoder:
     
@@ -29,7 +30,6 @@ class WhisperWrappedEncoder:
             x = self.ln_post(x)
             return x
 
-        import whisper
         if model_config.encoder_path_hf is not None:
             encoder = WhisperModel.from_pretrained(model_config.encoder_path_hf).encoder
         else:

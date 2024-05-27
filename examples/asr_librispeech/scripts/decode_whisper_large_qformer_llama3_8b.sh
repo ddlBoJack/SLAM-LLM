@@ -28,8 +28,8 @@ train_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
 
-checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-only-524-4
-output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-only-524-4
+checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu
+output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
 latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
@@ -71,8 +71,8 @@ python $code_dir/inference_asr_batch.py \
         ++train_config.freeze_llm=true \
         ++train_config.batching_strategy=custom \
         ++train_config.num_epochs=1 \
-        ++train_config.val_batch_size=32 \
-        ++train_config.num_workers_dataloader=32 \
+        ++train_config.val_batch_size=16 \
+        ++train_config.num_workers_dataloader=16 \
         ++train_config.output_dir=$output_dir \
         ++decode_log=$decode_log \
         ++model_config.ckpt_path=$ckpt_name \

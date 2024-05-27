@@ -78,20 +78,24 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
     train_prep = []
     train_loss = []
     train_acc = []
+    train_bleu = []
     val_prep = []
     val_loss =[]
     val_acc = []
+    val_bleu = []
     epoch_times = []
     checkpoint_times = []
     results = {}
     best_val_loss = float("inf")
     best_val_acc = 0.0
+    best_val_bleu = 0.0
     for epoch in range(train_config.num_epochs):
         epoch_start_time = time.perf_counter()
         with MemoryTrace() as memtrace:  # track the memory usage
             model.train()
             total_loss = 0.0
             total_acc = 0.0
+            total_bleu = 0.0
             total_length = len(train_dataloader)//gradient_accumulation_steps
             pbar = tqdm(colour="blue", desc=f"Training Epoch: {epoch+1}", total=total_length, dynamic_ncols=True)
 
@@ -110,21 +114,26 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                                 batch[key][k2] = batch[key][k2].to('cuda:0') if isinstance(batch[key][k2], torch.Tensor) else batch[key][k2]
                 with autocast():
                     outputs, *rest = model(**batch)
-                acc = rest[0] if rest else -1
+                if rest:
+                    acc, bleu = rest[:2]
+                else:
+                    acc, bleu = -1, -1
                 loss = outputs.loss
 
                 loss = loss / gradient_accumulation_steps
                 acc = acc / gradient_accumulation_steps
+                bleu = bleu / gradient_accumulation_steps
 
                 if log_config.use_wandb and step % log_config.log_interval == 0:
                     if train_config.enable_fsdp or train_config.enable_ddp:
                         if rank==0:
-                            wandb.log({"train_inner/train_inner_loss":loss, "train_inner/train_inner_accuracy":acc}, step=(epoch * total_length + step))
+                            wandb.log({"train_inner/train_inner_loss":loss, "train_inner/train_inner_accuracy":acc,"train_inner/train_inner_bleu":bleu}, step=(epoch * total_length + step))
                     else:
-                        wandb.log({"train_inner/train_inner_loss":loss, "train_inner/train_inner_accuracy":acc}, step=(epoch * total_length + step))
+                        wandb.log({"train_inner/train_inner_loss":loss, "train_inner/train_inner_accuracy":acc,"train_inner/train_inner_bleu":bleu}, step=(epoch * total_length + step))
                     
                 total_loss += loss.detach().float()
                 total_acc += acc
+                total_bleu += bleu
                 if train_config.use_fp16:
                     # if fp16 is enabled, use gradient scaler to handle gradient update
                     scaler.scale(loss).backward()
@@ -167,13 +176,15 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                         optimizer.zero_grad()
                         pbar.update(1)
 
-                pbar.set_description(f"Training Epoch: {epoch+1}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()}, acc: {acc})")
+                pbar.set_description(f"Training Epoch: {epoch+1}/{train_config.num_epochs}, step {step}/{len(train_dataloader)} completed (loss: {loss.detach().float()}, acc: {acc},bleu:{bleu})")
                 
                 if (epoch * total_length + step + 1) % train_config.validation_interval == 0 and train_config.run_validation:
                     eval_ppl, eval_epoch_loss, *rest = evaluation(model, train_config, eval_dataloader, local_rank, tokenizer)
                     eval_epoch_acc = rest[0] if rest else -1
+                    eval_epoch_bleu = rest[1] if rest else -1
                     checkpoint_start_time = time.perf_counter()
-                    if train_config.save_model and (eval_epoch_loss < best_val_loss):
+                    # if train_config.save_model and (eval_epoch_loss < best_val_loss):
+                    if train_config.save_model and (eval_epoch_bleu > best_val_bleu):
                         checkpoint_name = f"{train_config.model_name}_epoch_{str(epoch+1)}_step_{step+1}"
                         if train_config.enable_fsdp or train_config.enable_ddp:
                             dist.barrier()
@@ -277,16 +288,24 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                                     logger.info(f"best eval acc on epoch {epoch+1} is {best_val_acc}")
                             else:
                                 logger.info(f"best eval acc on epoch {epoch+1} is {best_val_acc}")
-                        val_acc.append(rest[0]) 
+                        val_acc.append(rest[0])
+                        if  eval_epoch_bleu > best_val_bleu:
+                            best_val_bleu = eval_epoch_bleu
+                            if train_config.enable_fsdp or train_config.enable_ddp:
+                                if rank==0:
+                                    logger.info(f"best eval bleu on epoch {epoch+1} is {best_val_bleu}")
+                            else:
+                                logger.info(f"best eval bleu on epoch {epoch+1} is {best_val_bleu}")
+                        val_bleu.append(rest[1])
                     else: 
                         val_acc.append(-1)
-                    
+                        val_bleu.append(-1)
                     if log_config.use_wandb:
                         if train_config.enable_fsdp or train_config.enable_ddp:
                             if rank==0:
-                                wandb.log({"valid/val_epoch_loss":eval_epoch_loss, "valid/val_perplexity":eval_ppl, "valid/best_val_loss":best_val_loss, "valid/val_accuracy":val_acc[-1], "valid/val_best_accuracy":best_val_acc})
+                                wandb.log({"valid/val_epoch_loss":eval_epoch_loss, "valid/val_perplexity":eval_ppl, "valid/best_val_loss":best_val_loss, "valid/val_accuracy":val_acc[-1], "valid/val_best_accuracy":best_val_acc,"valid/val_bleu":val_bleu[-1],"valid/val_best_bleu":best_val_bleu})
                         else:
-                            wandb.log({"valid/val_epoch_loss":eval_epoch_loss, "valid/val_perplexity":eval_ppl, "valid/best_val_loss":best_val_loss, "valid/val_accuracy":val_acc[-1], "valid/val_best_accuracy":best_val_acc})
+                            wandb.log({"valid/val_epoch_loss":eval_epoch_loss, "valid/val_perplexity":eval_ppl, "valid/best_val_loss":best_val_loss, "valid/val_accuracy":val_acc[-1], "valid/val_best_accuracy":best_val_acc,"valid/val_bleu":val_bleu[-1],"valid/val_best_bleu":best_val_bleu})
 
                 if train_config.run_test_during_validation:
                     if train_config.enable_fsdp or train_config.enable_ddp:
@@ -313,21 +332,24 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
             dist.all_reduce(total_acc, op=dist.ReduceOp.SUM)
         train_epoch_loss = total_loss / len(train_dataloader)
         train_epoch_acc = total_acc / len(train_dataloader)
+        train_epoch_bleu = total_bleu / len(train_dataloader)
         if train_config.enable_fsdp or train_config.enable_ddp:
             train_epoch_loss = train_epoch_loss/world_size
             train_epoch_acc = train_epoch_acc/world_size
+            train_epoch_bleu = train_epoch_bleu/world_size
         train_perplexity = torch.exp(train_epoch_loss)
 
         train_prep.append(train_perplexity)
         train_loss.append(train_epoch_loss)
         train_acc.append(train_epoch_acc)
+        train_bleu.append(train_epoch_bleu)
 
         if log_config.use_wandb:
             if train_config.enable_fsdp or train_config.enable_ddp:
                 if rank==0:
-                    wandb.log({"train/train_perplexity":train_perplexity, "train/train_epoch_loss":train_epoch_loss, "train/train_epoch_acc":train_epoch_acc})
+                    wandb.log({"train/train_perplexity":train_perplexity, "train/train_epoch_loss":train_epoch_loss, "train/train_epoch_acc":train_epoch_acc, "train/train_epoch_bleu":train_epoch_bleu})
             else:
-                wandb.log({"train/train_perplexity":train_perplexity, "train/train_epoch_loss":train_epoch_loss, "train/train_epoch_acc":train_epoch_acc})
+                wandb.log({"train/train_perplexity":train_perplexity, "train/train_epoch_loss":train_epoch_loss, "train/train_epoch_acc":train_epoch_acc, "train/train_epoch_bleu":train_epoch_bleu})
 
         if train_config.enable_fsdp or train_config.enable_ddp:
             if rank==0:
@@ -357,18 +379,24 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
     avg_train_prep = sum(train_prep)/len(train_prep)
     avg_train_loss = sum(train_loss)/len(train_loss)
     avg_train_acc = sum(train_acc)/len(train_acc)
+    avg_train_bleu = sum(train_bleu)/len(train_bleu)
+
     if train_config.run_validation:
         avg_eval_prep = sum(val_prep)/len(val_prep)
         avg_eval_loss = sum(val_loss)/len(val_loss)
         avg_eval_acc = sum(val_acc)/len(val_acc)
+        avg_eval_bleu = sum(val_bleu)/len(val_bleu)
+
 
     results['avg_train_prep'] = avg_train_prep
     results['avg_train_loss'] = avg_train_loss
     results['avg_train_acc'] = avg_train_acc
+    results['avg_train_bleu'] = avg_train_bleu
     if train_config.run_validation:
         results['avg_eval_prep'] = avg_eval_prep
         results['avg_eval_loss'] = avg_eval_loss
         results['avg_eval_acc'] = avg_eval_acc
+        results['avg_eval_bleu'] = avg_eval_bleu
     results["avg_epoch_time"] = avg_epoch_time
     results["avg_checkpoint_time"] = avg_checkpoint_time
 
@@ -396,6 +424,7 @@ def evaluation(model,train_config, eval_dataloader, local_rank, tokenizer):
     eval_preds = []
     eval_loss = 0.0  # Initialize evaluation loss
     eval_acc = 0.0
+    eval_bleu = 0.0
     autocast = torch.cuda.amp.autocast if train_config.use_fp16 else nullcontext # (Fix:MZY): fix expected scalar type mismatch in norm 
 
     with MemoryTrace() as memtrace:
@@ -410,13 +439,17 @@ def evaluation(model,train_config, eval_dataloader, local_rank, tokenizer):
             # Ensure no gradients are computed for this scope to save memory
             with torch.no_grad():
                 # Forward pass and compute loss
-                with autocast(): # (Fix:MZY): fix expected scalar type mismatch in norm 
+                with autocast():
                     outputs, *rest = model(**batch)
-                acc = rest[0] if rest else -1
+                if rest:
+                    acc, bleu = rest[:2]
+                else:
+                    acc, bleu = -1, -1
                 loss = outputs.loss
 
                 eval_loss += loss.detach().float()
                 eval_acc += acc
+                eval_bleu += bleu
             # Decode predictions and add to evaluation predictions list
             try:
                 preds = torch.argmax(outputs.logits, -1)
@@ -426,29 +459,39 @@ def evaluation(model,train_config, eval_dataloader, local_rank, tokenizer):
             except Exception:
                 pass  # vallex does not need to show it's result (we can't view any thing from abstract acoustic token)
             pbar.update(1)
-            pbar.set_description(f"step: {step+1}/{total_length}, eval_loss: {eval_loss/(step+1):.4f}, eval_acc: {eval_acc/(step+1):.4f}")
+            pbar.set_description(f"step: {step+1}/{total_length}, eval_loss: {eval_loss/(step+1):.4f}, eval_acc: {eval_acc/(step+1):.4f}, eval_bleu: {eval_bleu/(step+1):.4f}")
+
+    # 在每个设备上创建一个空张量用于存储 bleu 值
+    bleu_tensor = torch.tensor(eval_bleu)
+    bleu_tensor = bleu_tensor.to(outputs.logits.device)
 
     # If there's more than one CUDA device, reduce evaluation loss across all devices
     if torch.cuda.device_count() > 1 and train_config.enable_fsdp or train_config.enable_ddp:
         dist.all_reduce(eval_loss, op=dist.ReduceOp.SUM)
         dist.all_reduce(eval_acc, op=dist.ReduceOp.SUM)
+        dist.all_reduce(bleu_tensor, op=dist.ReduceOp.SUM)
+
 
     # Compute average loss and perplexity
     eval_epoch_loss = eval_loss / len(eval_dataloader)
     eval_epoch_acc = eval_acc / len(eval_dataloader)
+    eval_epoch_bleu = bleu_tensor / len(eval_dataloader)
+
     if train_config.enable_fsdp or train_config.enable_ddp:
         eval_epoch_loss = eval_epoch_loss/world_size
         eval_epoch_acc = eval_epoch_acc/world_size
+        eval_epoch_bleu = eval_epoch_bleu/world_size
+
     eval_ppl = torch.exp(eval_epoch_loss)
 
     # Print evaluation metrics
     if train_config.enable_fsdp or train_config.enable_ddp:
         if local_rank==0:
-            logger.info(f" {eval_ppl=} {eval_epoch_loss=} {eval_epoch_acc=}")
+            logger.info(f" {eval_ppl=} {eval_epoch_loss=} {eval_epoch_acc=} {eval_epoch_bleu=}")
     else:
-        logger.info(f" {eval_ppl=} {eval_epoch_loss=} {eval_epoch_acc=}")
+        logger.info(f" {eval_ppl=} {eval_epoch_loss=} {eval_epoch_acc=} {eval_epoch_bleu=}")
 
-    return eval_ppl, eval_epoch_loss, eval_epoch_acc
+    return eval_ppl, eval_epoch_loss, eval_epoch_acc, eval_epoch_bleu
 
 def freeze_transformer_layers(model, num_layer):
    for i, layer in enumerate(model.model.layers):

@@ -10,7 +10,7 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3,4
 export TOKENIZERS_PARALLELISM=false
 export WANDB_API_KEY=7291c67639a70b6aff97fede6add8b8516c7e079
 export CUDA_LAUNCH_BLOCKING=1
-export OMP_NUM_THREADS=1
+# export OMP_NUM_THREADS=1
 
 # debug setting for multiple gpus
 # export NCCL_DEBUG=INFO
@@ -28,8 +28,8 @@ train_data_path=/home/yxdu/hit/speech/data/common/4/en/train.jsonl
 val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
 
-checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-525
-output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-526
+checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-de-all-527-bleu
+output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-de-all-527-bleu-2
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
 latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
@@ -75,18 +75,18 @@ hydra.run.dir=$output_dir \
 ++train_config.warmup_steps=1000 \
 ++train_config.total_steps=1000000 \
 ++train_config.lr=1e-4 \
-++train_config.batch_size_training=4 \
+++train_config.batch_size_training=3 \
 ++train_config.val_batch_size=8 \
-++train_config.num_workers_dataloader=8 \
+++train_config.num_workers_dataloader=16 \
 ++train_config.output_dir=$output_dir \
 ++metric=acc \
 ++train_config.use_fp16=false \
-++model_config.ckpt_path=$ckpt_name \
+
 "
 
 
 
-
+# ++model_config.ckpt_path=$ckpt_name \
 
 
 # -m debugpy --listen 5678 --wait-for-client
@@ -107,7 +107,7 @@ else
         ++train_config.enable_ddp=true \
         ++fsdp_config.pure_bf16=true \
         ++log_config.use_wandb=true \
-        ++log_config.wandb_project_name=SLAM \
+        ++log_config.wandb_project_name=SLAM-BLEU \
         ++train_config.validation_interval=5000 \
         ++train_config.use_peft=false \
         $hydra_args

@@ -8,12 +8,13 @@ import torch.distributed as dist
 from typing import List, Optional, Tuple, Union
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig, AutoModel, AutoModelForSeq2SeqLM, T5ForConditionalGeneration
 from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
+import evaluate
 
 from slam_llm.utils.config_utils import generate_peft_config
 from slam_llm.utils.train_utils import print_module_size, print_model_size
 from peft import PeftModel, PeftConfig
 from torch.nn import CrossEntropyLoss
-from slam_llm.utils.metric import compute_accuracy
+from slam_llm.utils.metric import compute_accuracy,compute_bleu
 
 import logging
 logger = logging.getLogger(__name__)
@@ -259,6 +260,8 @@ class slam_model(nn.Module):
         self.train_config = train_config
         self.model_config = model_config
 
+        self.metric_bleu = evaluate.load("sacrebleu")
+
         if train_config.get("enable_deepspeed", False):
             def new_forward(self, input):
                 output = F.layer_norm(
@@ -304,8 +307,6 @@ class slam_model(nn.Module):
 
         modality_mask = kwargs.get("modality_mask", None)
         
-        zh_data = kwargs.get("zh", None)
-        en_data = kwargs.get("en", None)
 
         encoder_outs = None
         if audio_mel is not None or audio is not None or visual is not None:
@@ -382,17 +383,16 @@ class slam_model(nn.Module):
         if kwargs.get("inference_mode", False):
             return inputs_embeds, attention_mask
 
-        if zh_data is not None and en_data is not None:
-            model_outputs, acc = self.llm(zh=zh_data, en=en_data)
-        else:
-            model_outputs = self.llm(inputs_embeds=inputs_embeds, attention_mask=attention_mask, labels=labels)
-            acc = -1
-            if self.metric:
-                with torch.no_grad():
-                    preds = torch.argmax(model_outputs.logits, -1)
-                    acc = compute_accuracy(preds.detach()[:, :-1], labels.detach()[:, 1:], ignore_label=-100)
 
-        return model_outputs, acc
+        model_outputs = self.llm(inputs_embeds=inputs_embeds, attention_mask=attention_mask, labels=labels)
+        acc = -1
+        bleu = -1
+        if self.metric:
+            with torch.no_grad():
+                preds = torch.argmax(model_outputs.logits, -1)
+                acc = compute_accuracy(preds.detach()[:, :-1], labels.detach()[:, 1:], ignore_label=-100)
+                bleu = compute_bleu(preds.detach()[:, :-1], labels.detach()[:, 1:],self.tokenizer,self.metric_bleu)
+        return model_outputs, acc, bleu
     
     @torch.no_grad()
     def generate(self,
