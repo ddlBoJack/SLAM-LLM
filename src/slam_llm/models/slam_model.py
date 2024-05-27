@@ -260,7 +260,6 @@ class slam_model(nn.Module):
         self.train_config = train_config
         self.model_config = model_config
 
-        self.metric_bleu = evaluate.load("sacrebleu")
 
         if train_config.get("enable_deepspeed", False):
             def new_forward(self, input):
@@ -391,7 +390,7 @@ class slam_model(nn.Module):
             with torch.no_grad():
                 preds = torch.argmax(model_outputs.logits, -1)
                 acc = compute_accuracy(preds.detach()[:, :-1], labels.detach()[:, 1:], ignore_label=-100)
-                bleu = compute_bleu(preds.detach()[:, :-1], labels.detach()[:, 1:],self.tokenizer,self.metric_bleu)
+                bleu = compute_bleu(preds.detach()[:, :-1], labels.detach()[:, 1:],self.tokenizer)
         return model_outputs, acc, bleu
     
     @torch.no_grad()
