@@ -14,7 +14,7 @@ from slam_llm.utils.config_utils import generate_peft_config
 from slam_llm.utils.train_utils import print_module_size, print_model_size
 from peft import PeftModel, PeftConfig
 from torch.nn import CrossEntropyLoss
-from slam_llm.utils.metric import compute_accuracy,compute_bleu
+from slam_llm.utils.metric import compute_accuracy,compute_bleu,compute_wer
 
 import logging
 logger = logging.getLogger(__name__)
@@ -298,6 +298,7 @@ class slam_model(nn.Module):
         audio_mask = kwargs.get("audio_mask", None)
         visual = kwargs.get("visual", None)
         visual_mask = kwargs.get("visual_mask", None)
+        text_lan = kwargs.get("text_lan", None)
 
 
         # for text encoder
@@ -388,9 +389,12 @@ class slam_model(nn.Module):
         bleu = -1
         if self.metric:
             with torch.no_grad():
-                preds = torch.argmax(model_outputs.logits, -1)
+                preds = torch.argmax(input=model_outputs.logits, dim=-1)
                 acc = compute_accuracy(preds.detach()[:, :-1], labels.detach()[:, 1:], ignore_label=-100)
-                bleu = compute_bleu(preds.detach()[:, :-1], labels.detach()[:, 1:],self.tokenizer)
+                # bleu = compute_bleu(preds.detach()[:, :-1], labels.detach()[:, 1:],self.tokenizer, text_lan)
+                # wer = compute_wer(preds.detach()[:, :-1], labels.detach()[:, 1:],self.tokenizer, text_lan)
+                
+                
         return model_outputs, acc, bleu
     
     @torch.no_grad()
@@ -427,7 +431,7 @@ class slam_model(nn.Module):
             inputs_embeds=inputs_embeds,
             # max_length=kwargs.get("max_length", 200),
             max_new_tokens=kwargs.get("max_new_tokens", 50),
-            num_beams=kwargs.get("num_beams", 4),
+            num_beams=kwargs.get("num_beams", 3),
             do_sample=False,
             min_new_tokens=1,
             top_p=1,

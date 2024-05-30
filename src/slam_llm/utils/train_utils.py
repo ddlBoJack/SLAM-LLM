@@ -184,7 +184,7 @@ def train(model, train_dataloader,eval_dataloader, tokenizer, optimizer, lr_sche
                     eval_epoch_bleu = rest[1] if rest else -1
                     checkpoint_start_time = time.perf_counter()
                     # if train_config.save_model and (eval_epoch_loss < best_val_loss):
-                    if train_config.save_model and (eval_epoch_bleu > best_val_bleu):
+                    if train_config.save_model and (eval_epoch_acc > best_val_acc):
                         checkpoint_name = f"{train_config.model_name}_epoch_{str(epoch+1)}_step_{step+1}"
                         if train_config.enable_fsdp or train_config.enable_ddp:
                             dist.barrier()

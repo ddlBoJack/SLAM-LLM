@@ -32,29 +32,17 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
         self.prompt = dataset_config.get("prompt", None)
         self.bf16 = dataset_config.get("bf16", False)
         self.mel_size = dataset_config.get("mel_size", 80) # 80 for whisper large v1 and v2, 128 for large v3
-        # self.prompt_library = [
-        #     "Begin by converting the spoken words into written text. ",
-        #     "Can you transcribe the speech into a written format? ",
-        #     "Focus on translating the audible content into text. ",
-        #     "Transcribe the speech by carefully listening to it. ",
-        #     "Would you kindly write down the content of the speech? ",
-        #     "Analyze the speech and create a written transcription. ",
-        #     "Engage with the speech to produce a text-based version. ",
-        #     "Can you document the speech in written form? ",
-        #     "Transform the spoken words into text accurately. ",
-        #     "How about putting the speech's content into writing? "
-        # ]
-        self.prompt_library = [
-            "<en>",
-            "<de>",
-            "<cn>",
-            "<en><en>",
-            "<en><ja>",
-            "<en><fr>",
-            "<en><it>",
-            "<en><qa>",
-        ]
-        self.prompt_template = "<|im_start|>user:\n{}<|im_end|>\n<|im_start|>assistant\n"
+        self.source = dataset_config.get("source", None)
+        self.text_lan=self.source.split("_")[-2]
+        self.prompt_library = {
+            "en":"<en>",
+            "de":"<de>",
+            "zh-CN":"<cn>",
+            "fr":"<fr>",
+            "es":"<es>",
+            "ja":"<ja>",
+        }
+        # self.prompt_template = "<|im_start|>user:\n{}<|im_end|>\n<|im_start|>assistant\n"
         # self.prompt_template = "USER: {}\nASSISTANT:"
 
         self.answer_template = "{}"
@@ -100,11 +88,8 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
     def __getitem__(self, index):
         data_dict = self.data_list[index]
         audio_path = data_dict.get("source")
-        en = data_dict.get("en", None)
-        cn = data_dict.get("zh-CN", None)
-        de = data_dict.get("de", None)
+        target = data_dict.get(self.text_lan, None)
         task = data_dict.get("prompt", "ASR")
-        multask = data_dict.get("task")
         key = data_dict.get("key", str(index))
 
         audio_raw = whisper.load_audio(audio_path)
@@ -128,28 +113,9 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
             audio_length = self.fix_length_audio
         audio_pseudo = torch.full((audio_length,), -1) # placeholder
 
-        
+        prompt = self.prompt_library.get(self.text_lan, "")
 
-        # prompt = self.prompt_library[0]
-        # target = en
-        if multask == 0:
-            prompt = "<|startoftranscript|><|en|><|transcribe|><|en|><|wo_itn|>'"
-            target = en
-        elif multask == 1:
-            prompt = self.prompt_library[1]+en
-            target = en + "<de>"+de
-        else:
-            # prompt = self.prompt_library[1]
-            # target = en + "<de>"+de
-            # prompt = self.prompt_library[2]
-            # target = cn
-            prompt = "<|zh|>"
-            target = cn
-
-        # prompt = self.prompt_template.format(prompt)
-
-        # print(prompt)
-        # print(target)
+        target = target
 
 
         prompt_ids = self.tokenizer.encode(prompt)
@@ -225,6 +191,7 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
                                  for s in samples])
         attention_mask = torch.stack([self.pad(s['attention_mask'], input_ids_max_length, False)
                                       for s in samples])
+        
         if self.input_type == "raw":
             audio_raw_max_length = max([s['audio'].shape[0] for s in samples])
             audio_raw = torch.stack([self.pad(s['audio'], audio_raw_max_length, 0)
@@ -257,7 +224,7 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
                 "audio_mel_post_mask": audio_mel_post_mask if self.input_type == "mel" else None,
                 "modality_mask": modality_mask,
                 "keys": keys,
-                "targets": targets
+                "targets": targets,
             }
 
         labels = torch.stack([self.pad(s['labels'], input_ids_max_length, self.IGNORE_INDEX)
@@ -270,7 +237,8 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
             "audio_mask": audio_mask if self.input_type == "raw" else None,
             "audio_mel": audio_mel if self.input_type == "mel" else None,
             "audio_mel_post_mask": audio_mel_post_mask if self.input_type == "mel" else None,
-            "modality_mask": modality_mask
+            "modality_mask": modality_mask,
+            "text_lan":self.text_lan,
         }
 
 

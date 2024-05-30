@@ -6,7 +6,7 @@
 
 
 # export PYTHONPATH=/root/fairseq:$PYTHONPATH
-# export CUDA_VISIBLE_DEVICES=0,1,2,3,4
+export CUDA_VISIBLE_DEVICES=4
 export TOKENIZERS_PARALLELISM=false
 export WANDB_API_KEY=7291c67639a70b6aff97fede6add8b8516c7e079
 # export CUDA_LAUNCH_BLOCKING=1
@@ -27,10 +27,23 @@ llm_path=/home/yxdu/hit/speech/models/Qwen1.5-7B
 train_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
+source=covost_en_de_test
+source=covost_en_zh-CN_test
 
-checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu
-output_dir=/home/yxdu/hit/speech/bleu_output
+
+
+
+
+
+
+
+checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu-2
+output_dir=/home/yxdu/hit/speech/bleu_de_output
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
+# latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
+#获取创建最早的文件
+# latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort | head -n 1 | cut -d" " -f2-)
+
 latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
 # 检查是否找到了文件
@@ -66,12 +79,13 @@ python $code_dir/inference_asr_batch.py \
         ++dataset_config.fix_length_audio=80 \
         ++dataset_config.mel_size=80 \
         ++dataset_config.inference_mode=true \
+        ++dataset_config.source=$source \
         ++train_config.model_name=asr \
         ++train_config.freeze_encoder=true \
         ++train_config.freeze_llm=true \
         ++train_config.batching_strategy=custom \
         ++train_config.num_epochs=1 \
-        ++train_config.val_batch_size=16 \
+        ++train_config.val_batch_size=8 \
         ++train_config.num_workers_dataloader=16 \
         ++train_config.output_dir=$output_dir \
         ++decode_log=$decode_log \

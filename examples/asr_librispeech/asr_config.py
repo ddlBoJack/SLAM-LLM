@@ -108,6 +108,7 @@ class DataConfig:
         "help": "whether input is normalized, used for models such as wavlm"
     })
     bf16:bool = False
+    source: Optional[str] = None
 
 @dataclass
 class FSDPConfig:
