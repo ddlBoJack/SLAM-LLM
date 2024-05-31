@@ -9,9 +9,9 @@ export PYTHONPATH=/root/fairseq:$PYTHONPATH
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4
 export TOKENIZERS_PARALLELISM=false
 export WANDB_API_KEY=7291c67639a70b6aff97fede6add8b8516c7e079
-export CUDA_LAUNCH_BLOCKING=1
-export HYDRA_FULL_ERROR=1
-# export OMP_NUM_THREADS=1
+# export CUDA_LAUNCH_BLOCKING=1
+# export HYDRA_FULL_ERROR=1
+export OMP_NUM_THREADS=1
 
 # debug setting for multiple gpus
 # export NCCL_DEBUG=INFO
@@ -87,10 +87,11 @@ hydra.run.dir=$output_dir \
 ++train_config.output_dir=$output_dir \
 ++metric=acc \
 ++train_config.use_fp16=false \
+++model_config.ckpt_path=$ckpt_name \
 "
 
 
-# ++model_config.ckpt_path=$ckpt_name \
+
 
 
 
@@ -113,7 +114,7 @@ else
         ++fsdp_config.pure_bf16=true \
         ++log_config.use_wandb=true \
         ++log_config.wandb_project_name=SLAM-ASRST \
-        ++train_config.validation_interval=5000 \
+        ++train_config.validation_interval=2000 \
         ++train_config.use_peft=false \
         $hydra_args
 fi
