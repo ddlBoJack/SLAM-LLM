@@ -35,6 +35,7 @@ source=covost_en_enzh_test
 checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-enzh-531
 output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-enzh-531-2
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
+
 latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
 # 检查是否找到了文件
