@@ -31,7 +31,8 @@ class WhisperWrappedEncoder:
             return x
 
         if model_config.encoder_path_hf is not None:
-            encoder = WhisperModel.from_pretrained(model_config.encoder_path_hf).encoder
+            encoder = WhisperModel.from_pretrained(model_config.encoder_path_hf, attn_implementation="flash_attention_2",torch_dtype=torch.bfloat16).encoder
+            # encoder = WhisperModel.from_pretrained(model_config.encoder_path_hf).encoder
         else:
             encoder = whisper.load_model(name=model_config.encoder_path, device='cpu').encoder
             encoder.extract_variable_length_features = types.MethodType(extract_variable_length_features, encoder)

@@ -27,7 +27,7 @@ llm_path=/home/yxdu/hit/speech/models/Qwen1.5-7B
 train_data_path=/home/yxdu/hit/speech/data/common/4/en/train.jsonl
 val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
-source=covost_en_zh-CN_test
+source=covost_en_zh_test
 
 
 checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu

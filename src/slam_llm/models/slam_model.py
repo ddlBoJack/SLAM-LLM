@@ -148,6 +148,8 @@ def setup_llm(train_config, model_config, **kwargs):
                     load_in_8bit=True if train_config.quantization else None,
                     device_map="auto" if train_config.quantization else None,
                     use_cache=use_cache,
+                    attn_implementation="flash_attention_2" if train_config.use_fast_kernels else None,
+                    torch_dtype=torch.bfloat16
                 )
         else:
             llama_config = AutoConfig.from_pretrained(model_config.llm_path)
@@ -172,6 +174,8 @@ def setup_llm(train_config, model_config, **kwargs):
                 load_in_8bit=True if train_config.quantization else None,
                 device_map="auto" if train_config.quantization else None,
                 use_cache=use_cache,
+                attn_implementation="flash_attention_2" if train_config.use_fast_kernels else None,
+                torch_dtype=torch.bfloat16
             )
         else:
             model = AutoModelForCausalLM.from_pretrained(
@@ -179,18 +183,9 @@ def setup_llm(train_config, model_config, **kwargs):
                 load_in_8bit=True if train_config.quantization else None,
                 device_map="auto" if train_config.quantization else None,
                 use_cache=use_cache,
+                attn_implementation="flash_attention_2" if train_config.use_fast_kernels else None,
+                torch_dtype=torch.bfloat16
             )
-    if (train_config.enable_fsdp or train_config.enable_ddp) and train_config.use_fast_kernels:
-        """
-        For FSDP and FSDP+PEFT, setting 'use_fast_kernels' will enable
-        using of Flash Attention or Xformer memory-efficient kernels
-        based on the hardware being used. This would speed up fine-tuning.
-        """
-        try:
-            from optimum.bettertransformer import BetterTransformer
-            model = BetterTransformer.transform(model)
-        except ImportError:
-            logger.warning("Module 'optimum' not found. Please install 'optimum' it before proceeding.")
 
     print_module_size(model, model_config.llm_name, int(os.environ["RANK"]) if train_config.enable_fsdp or train_config.enable_ddp else 0)
 

@@ -35,12 +35,13 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
         self.source = dataset_config.get("source", None)
         self.text_lan=self.source.split("_")[-2]
         self.prompt_library = {
-            "en":"<en>",
-            "de":"<de>",
-            "zh-CN":"<cn>",
-            "fr":"<fr>",
-            "es":"<es>",
-            "ja":"<ja>",
+            "en":"<|en|>",
+            "de":"<|de|>",
+            "zh":"<|zh|>",
+            "fr":"<|fr|>",
+            "es":"<|es|>",
+            "ja":"<|ja|>",
+            "enzh":"<|enzh|>"
         }
         # self.prompt_template = "<|im_start|>user:\n{}<|im_end|>\n<|im_start|>assistant\n"
         # self.prompt_template = "USER: {}\nASSISTANT:"
@@ -89,6 +90,11 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
         data_dict = self.data_list[index]
         audio_path = data_dict.get("source")
         target = data_dict.get(self.text_lan, None)
+        if target==None:
+            language1 = data_dict.get(self.text_lan[:2], None)
+            language2 = data_dict.get(self.text_lan[2:], None)
+            target = language1 + self.prompt_library.get(self.text_lan, "")+language2
+
         task = data_dict.get("prompt", "ASR")
         key = data_dict.get("key", str(index))
 
