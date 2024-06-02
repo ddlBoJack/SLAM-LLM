@@ -30,11 +30,42 @@ val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
 
 source=covost_en_en_test
-source=covost_en_enzh_test
+source=covost_en_ende_test
+source=covost_en_enja_test
 
-checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-enzh-531
-output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-enzh-531-2
+
+
+
+
+
+
+
+
+
+checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-en-531
+
+output_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-enja-602
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
+
+
+
+
+
+
+
+version_encoder_path_hf="${encoder_path_hf: -2}"
+echo $version_encoder_path_hf
+if [ "$version_encoder_path_hf" == "v2" ]; then
+    mel_size=80
+else
+    mel_size=128
+fi
+echo $mel_size
+
+
+
+
+
 
 latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 
@@ -69,7 +100,7 @@ hydra.run.dir=$output_dir \
 ++dataset_config.train_data_path=$train_data_path \
 ++dataset_config.val_data_path=$val_data_path \
 ++dataset_config.input_type=mel \
-++dataset_config.mel_size=80 \
+++dataset_config.mel_size=$mel_size \
 ++dataset_config.fix_length_audio=80 \
 ++dataset_config.source=$source \
 ++train_config.model_name=asr \
@@ -81,7 +112,7 @@ hydra.run.dir=$output_dir \
 ++train_config.warmup_steps=1000 \
 ++train_config.total_steps=1000000 \
 ++train_config.lr=1e-4 \
-++train_config.batch_size_training=4 \
+++train_config.batch_size_training=3 \
 ++train_config.val_batch_size=8 \
 ++train_config.num_workers_dataloader=8 \
 ++train_config.output_dir=$output_dir \
@@ -114,7 +145,8 @@ else
         ++fsdp_config.pure_bf16=true \
         ++log_config.use_wandb=true \
         ++log_config.wandb_project_name=SLAM-ASRST \
-        ++train_config.validation_interval=2000 \
+        ++log_config.wandb_exp_name=SLAM-ASRST-enja \
+        ++train_config.validation_interval=5000 \
         ++train_config.use_peft=false \
         $hydra_args
 fi

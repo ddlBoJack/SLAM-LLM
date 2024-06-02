@@ -130,3 +130,4 @@ class LogConfig:
     wandb_exp_name: str = "exp_name"
     log_file: str = "./test.log"
     log_interval: int = 50
+    decode_log: str = "./test.log"

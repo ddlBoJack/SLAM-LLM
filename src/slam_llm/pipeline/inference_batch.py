@@ -2,14 +2,25 @@
 import random
 import torch
 import logging
+import sacrebleu
 # import argparse
+import itertools
+import json
+import time
 from slam_llm.models.slam_model import slam_model
 # config
 # from llama_recipes.configs import fsdp_config as FSDP_CONFIG
 # from llama_recipes.configs import train_config as TRAIN_CONFIG
 # from llama_recipes.configs import model_config as MODEL_CONFIG
 # from llama_recipes.configs import log_config as LOG_CONFIG
-
+from slam_llm.utils.train_utils import (
+    train,
+    freeze_transformer_layers,
+    setup,
+    setup_environ_flags,
+    clear_gpu_cache,
+    get_policies
+)
 from slam_llm.utils.model_utils import get_custom_model_factory
 from slam_llm.utils.dataset_utils import get_preprocessed_dataset
 import os
@@ -44,11 +55,35 @@ def main_hydra(cfg: DictConfig):
 	main(kwargs)
 
 
+class InferenceSampler(torch.utils.data.sampler.Sampler):
+
+    def __init__(self, size):
+        self._size = int(size)
+        assert size > 0
+        self._rank = torch.distributed.get_rank()
+        self._world_size = torch.distributed.get_world_size()
+        self._local_indices = self._get_local_indices(size, self._world_size,
+                                                      self._rank)
+
+    @staticmethod
+    def _get_local_indices(total_size, world_size, rank):
+        shard_size = total_size // world_size
+        left = total_size % world_size
+        shard_sizes = [shard_size + int(r < left) for r in range(world_size)]
+
+        begin = sum(shard_sizes[:rank])
+        end = min(sum(shard_sizes[:rank + 1]), total_size)
+        return range(begin, end)
+
+    def __iter__(self):
+        yield from self._local_indices
+
+    def __len__(self):
+        return len(self._local_indices)
+
 def main(kwargs: DictConfig):
 
 	# Update the configuration for the training and sharding process
-	# train_config, fsdp_config, model_config, log_config = TRAIN_CONFIG(), FSDP_CONFIG(), MODEL_CONFIG(), LOG_CONFIG()
-	# update_config((train_config, fsdp_config, model_config, log_config), **kwargs)
 	train_config, fsdp_config, model_config, log_config, dataset_config = kwargs.train_config, \
 	                                                                      kwargs.fsdp_config, \
 	                                                                      kwargs.model_config, \
@@ -63,40 +98,29 @@ def main(kwargs: DictConfig):
 	del kwargs["dataset_config"]
 	OmegaConf.set_struct(kwargs,True)
 
-	# Set log
-	if not os.path.exists(os.path.dirname(log_config.log_file)):
-		os.makedirs(os.path.dirname(log_config.log_file), exist_ok=True)
-	logging.basicConfig(
-		level=logging.INFO, 
-		format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-		datefmt="%Y-%m-%d %H:%M:%S",
-		filemode='w'
-	)
 
-	logger = logging.getLogger()  
-	logger.setLevel(logging.INFO)
 
-	file_handler = logging.FileHandler(filename=log_config.log_file, mode='w')
-	file_handler.setLevel(logging.INFO)
-	file_formatter = logging.Formatter('[%(asctime)s][%(name)s][%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-	file_handler.setFormatter(file_formatter)
-
-	logger.handlers[0].setLevel(logging.INFO)
-	console_formatter = logging.Formatter('[%(asctime)s][%(name)s][%(levelname)s] - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-	logger.handlers[0].setFormatter(console_formatter) 
-
-	logger.addHandler(file_handler)
-    
-	logger.info("train_config: {}".format(train_config))
-	logger.info("fsdp_config: {}".format(fsdp_config))
-	logger.info("model_config: {}".format(model_config))
-
-	
 	# Set the seeds for reproducibility
 	torch.cuda.manual_seed(train_config.seed)
 	torch.manual_seed(train_config.seed)
 	random.seed(train_config.seed)
-	
+
+
+
+
+	if train_config.enable_fsdp or train_config.enable_ddp:
+		setup()
+		local_rank = int(os.environ["LOCAL_RANK"])
+		rank = int(os.environ["RANK"])
+		world_size = int(os.environ["WORLD_SIZE"])
+
+
+	if torch.distributed.is_initialized():
+		torch.cuda.set_device(local_rank)
+		clear_gpu_cache(local_rank)
+		setup_environ_flags(rank)
+
+
 	# model_factory = get_custom_model_factory(model_config, logger)
 	model, tokenizer = model_factory(train_config, model_config, **kwargs)
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # FIX(MZY): put the whole model to device.
@@ -105,18 +129,18 @@ def main(kwargs: DictConfig):
 	model.to(device)
 	model.eval()
 
-	# dataset_config = generate_dataset_config(train_config, kwargs)
-	logger.info("dataset_config: {}".format(dataset_config))
+
+
+
 	dataset_test = get_preprocessed_dataset(
         tokenizer,
         dataset_config,
         split="test",
     )
-	if not (train_config.enable_fsdp or train_config.enable_ddp) or rank == 0:
-		logger.info(f"--> Training Set Length = {len(dataset_test)}")
 
 	test_dataloader = torch.utils.data.DataLoader(
             dataset_test,
+			sampler=InferenceSampler(len(dataset_test)),
             num_workers=train_config.num_workers_dataloader,
             pin_memory=True,
 			shuffle=False,
@@ -127,64 +151,54 @@ def main(kwargs: DictConfig):
         )
 	
 
-	logger.info("=====================================")
-	pred_path = kwargs.get('decode_log') + "_pred"
-	gt_path = kwargs.get('decode_log') + "_gt"
-	preds = []
 	gts = []
-	
-	import sacrebleu
-
-	ave_bleu = 0.0
-	all_bleu = 0.0
-	count =1
-
+	sources = []
+	rets = []
 
 	source = dataset_config.get("source", None)
-
-	text_lan = source.split("_")[-2]
-	if text_lan == "ja":
-		text_lan = "ja-mecab"
-	elif text_lan == "zh-CN":
-		text_lan = "zh"
-	else:
-		text_lan = "13a"
 	
-	with open(pred_path, "w") as pred, open(gt_path, "w") as gt:
-		for step, batch in tqdm(enumerate(test_dataloader), total=len(test_dataloader)):
-			for key in batch.keys():
-				batch[key] = batch[key].to(device) if isinstance(batch[key], torch.Tensor) else batch[key]
-			tmp_preds = []
-			tmp_gts = []
+	for step, batch in tqdm(enumerate(test_dataloader), total=len(test_dataloader)):
+		for key in batch.keys():
+			batch[key] = batch[key].to(device) if isinstance(batch[key], torch.Tensor) else batch[key]
+		
+		model_outputs = model.generate(**batch)
+		output_text = model.tokenizer.batch_decode(model_outputs, add_special_tokens=False, skip_special_tokens=True)
+		for key, text, target in zip(batch["keys"], output_text, batch["targets"]):	
+			print(key,text)
+			print(key,target)
+
+			rets.append(text)
+			gts.append(target)
+			sources.append(source)
 			
-			model_outputs = model.generate(**batch)
-			output_text = model.tokenizer.batch_decode(model_outputs, add_special_tokens=False, skip_special_tokens=True)
-			for key, text, target in zip(batch["keys"], output_text, batch["targets"]):	
-				print(key,text)
-				print(key,target)
-				pred.write(key + "\t" + text.replace("\n", " ") + "\n")
-				gt.write(key + "\t" + target + "\n")
+	torch.distributed.barrier()
 
 
+	
+	merged_gts = [None for _ in range(world_size)]
+	merged_sources = [None for _ in range(world_size)]
+	merged_responses = [None for _ in range(world_size)]
+	torch.distributed.all_gather_object(merged_gts, gts)
+	torch.distributed.all_gather_object(merged_sources, sources)
+	torch.distributed.all_gather_object(merged_responses, rets)
 
-				tmp_preds.append(text)
-				tmp_gts.append(target)
+	merged_gts = [_ for _ in itertools.chain.from_iterable(merged_gts)]
+	merged_sources = [_ for _ in itertools.chain.from_iterable(merged_sources)]
+	merged_responses = [_ for _ in itertools.chain.from_iterable(merged_responses)]
 
+	if torch.distributed.get_rank() == 0:
 
-				preds.append(text)
-				gts.append(target)
-			
-			tmp_result = sacrebleu.corpus_bleu(tmp_preds, [tmp_gts],tokenize=text_lan)
-			print(tmp_result)
+		results_file = log_config.decode_log
+		with open(results_file, 'w') as f:
+			for gt, response, source in zip(merged_gts, merged_responses, merged_sources):
+				result = {
+					'gt': gt,
+					'response': response,
+					'source': source,
+				}
+				f.write(json.dumps(result) + '\n')
 
-			
-			all_bleu +=tmp_result.score
-			ave_bleu = (all_bleu/count)
-			count +=1
-			print("ave_bleu:"+str(ave_bleu))
-
-		result = sacrebleu.corpus_bleu(preds, [gts],tokenize=text_lan)
-		print(result)
+	torch.distributed.barrier()
 
 
 

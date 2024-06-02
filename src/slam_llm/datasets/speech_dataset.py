@@ -41,7 +41,8 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
             "fr":"<|fr|>",
             "es":"<|es|>",
             "ja":"<|ja|>",
-            "enzh":"<|enzh|>"
+            "enzh":"<|enzh|>",
+            "ende":"<|ende|>"
         }
         # self.prompt_template = "<|im_start|>user:\n{}<|im_end|>\n<|im_start|>assistant\n"
         # self.prompt_template = "USER: {}\nASSISTANT:"
@@ -64,6 +65,8 @@ class SpeechDatasetJsonl(torch.utils.data.Dataset):
                 for line in fin:
                     data_dict = json.loads(line.strip())
                     self.data_list.append(data_dict)
+
+        # self.data_list=self.data_list[:200]
             
 
         # # debug

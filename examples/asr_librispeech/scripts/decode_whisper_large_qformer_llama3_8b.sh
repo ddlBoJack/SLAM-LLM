@@ -4,14 +4,16 @@
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.8/lib64
 # export CUDA_HOME=/usr/local/cuda-11.8
 
+export MASTER_ADDR=localhost
+export MASTER_PORT=12345
 
 # export PYTHONPATH=/root/fairseq:$PYTHONPATH
-export CUDA_VISIBLE_DEVICES=4
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4
 export TOKENIZERS_PARALLELISM=false
 export WANDB_API_KEY=7291c67639a70b6aff97fede6add8b8516c7e079
 # export CUDA_LAUNCH_BLOCKING=1
 export OMP_NUM_THREADS=1
-export HYDRA_FULL_ERROR=1
+# export HYDRA_FULL_ERROR=1
 # debug setting for multiple gpus
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=ALL
@@ -24,21 +26,28 @@ code_dir=examples/asr_librispeech
 speech_encoder_path=/home/yxdu/hit/speech/models/whisper/large-v2.pt
 encoder_path_hf=/home/yxdu/hit/speech/models/whisper-large-v2
 llm_path=/home/yxdu/hit/speech/models/Qwen1.5-7B
+
 train_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 val_data_path=/home/yxdu/hit/speech/data/common/4/en/test.jsonl
 
+# encoder_path_hf=/home/yxdu/hit/speech/models/whisper-large-v3
+# llm_path=/home/yxdu/hit/speech/models/Meta-Llama-3-8B-Instruct
+
+version_encoder_path_hf="${encoder_path_hf: -2}"
+echo $version_encoder_path_hf
+if [ "$version_encoder_path_hf" == "v2" ]; then
+    mel_size=80
+else
+    mel_size=128
+fi
+echo $mel_size
+
 source=covost_en_de_test
-source=covost_en_zh-CN_test
+source=covost_en_enzh_test
+source=covost_en_ende_test
 
 
-
-
-
-
-
-
-checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-cn-all-527-bleu-2
-output_dir=/home/yxdu/hit/speech/bleu_de_output
+checkpoint_dir=/home/yxdu/hit/speech/output/whisper-qformer-qwen1.5-7b-ende-601
 # 使用find命令搜索所有.pt文件，并获取最后修改日期最晚的文件
 # latest_file=$(find "$checkpoint_dir" -type f -name "*.pt" -printf '%T+ %p\n' | sort -r | head -n 1 | tail -n 1 | cut -d" " -f2-)
 #获取创建最早的文件
@@ -56,14 +65,65 @@ if [[ -n "$latest_file" ]]; then
 else
     echo "No .pt files found in $checkpoint_dir."
 fi
-ckpt_dir=$output_dir
-decode_log=$ckpt_dir/decode__beam4
+
+decode_log=$checkpoint_dir/decode__beam3_pred_gt
 
 # -m debugpy --listen 5678 --wait-for-client
-python $code_dir/inference_asr_batch.py \
+# python $code_dir/inference_asr_batch.py \
+#         --config-path "conf" \
+#         --config-name "prompt.yaml" \
+#         hydra.run.dir=$ckpt_dir \
+#         ++model_config.llm_name="vicuna-7b-v1.5" \
+#         ++model_config.llm_path=$llm_path \
+#         ++model_config.llm_dim=4096 \
+#         ++model_config.encoder_name=whisper \
+#         ++model_config.encoder_projector_ds_rate=5 \
+#         ++model_config.encoder_path=$speech_encoder_path \
+#         ++model_config.encoder_path_hf=$encoder_path_hf \
+#         ++model_config.encoder_dim=1280 \
+#         ++model_config.encoder_projector=q-former \
+#         ++dataset_config.dataset=speech_dataset \
+#         ++dataset_config.val_data_path=$val_data_path \
+#         ++dataset_config.input_type=mel \
+#         ++dataset_config.fix_length_audio=80 \
+#         ++dataset_config.mel_size=80 \
+#         ++dataset_config.inference_mode=true \
+#         ++dataset_config.source=$source \
+#         ++train_config.model_name=asr \
+#         ++train_config.freeze_encoder=true \
+#         ++train_config.freeze_llm=true \
+#         ++train_config.batching_strategy=custom \
+#         ++train_config.num_epochs=1 \
+#         ++train_config.val_batch_size=4 \
+#         ++train_config.num_workers_dataloader=8 \
+#         ++train_config.output_dir=$output_dir \
+#         ++decode_log=$decode_log \
+#         ++model_config.ckpt_path=$ckpt_name \
+#         # ++peft_ckpt=$ckpt_path \
+#         # ++train_config.use_peft=true \
+#         # ++train_config.peft_config.r=32 \
+#         # ++dataset_config.normalize=true \
+#         # ++model_config.encoder_projector=q-former \
+#         # ++dataset_config.fix_length_audio=64 \
+
+
+# -m debugpy --listen 5678 --wait-for-client
+if [[ $CUDA_VISIBLE_DEVICES != *","* ]]; then
+    python -m debugpy --listen 5678 --wait-for-client $code_dir/finetune_asr.py \
         --config-path "conf" \
         --config-name "prompt.yaml" \
-        hydra.run.dir=$ckpt_dir \
+        $hydra_args
+else
+    torchrun \
+        --nnodes 1 \
+        --nproc_per_node 5 \
+        --master_port=29503 \
+        $code_dir/inference_asr_batch.py \
+        --config-path "conf" \
+        --config-name "prompt.yaml" \
+        ++train_config.enable_fsdp=false \
+        ++train_config.enable_ddp=true \
+        ++fsdp_config.pure_bf16=true \
         ++model_config.llm_name="vicuna-7b-v1.5" \
         ++model_config.llm_path=$llm_path \
         ++model_config.llm_dim=4096 \
@@ -77,7 +137,7 @@ python $code_dir/inference_asr_batch.py \
         ++dataset_config.val_data_path=$val_data_path \
         ++dataset_config.input_type=mel \
         ++dataset_config.fix_length_audio=80 \
-        ++dataset_config.mel_size=80 \
+        ++dataset_config.mel_size=$mel_size \
         ++dataset_config.inference_mode=true \
         ++dataset_config.source=$source \
         ++train_config.model_name=asr \
@@ -85,14 +145,12 @@ python $code_dir/inference_asr_batch.py \
         ++train_config.freeze_llm=true \
         ++train_config.batching_strategy=custom \
         ++train_config.num_epochs=1 \
-        ++train_config.val_batch_size=8 \
-        ++train_config.num_workers_dataloader=16 \
-        ++train_config.output_dir=$output_dir \
-        ++decode_log=$decode_log \
+        ++train_config.val_batch_size=4 \
+        ++train_config.num_workers_dataloader=8 \
+        ++train_config.output_dir=$checkpoint_dir \
+        ++log_config.decode_log=$decode_log \
         ++model_config.ckpt_path=$ckpt_name \
-        # ++peft_ckpt=$ckpt_path \
-        # ++train_config.use_peft=true \
-        # ++train_config.peft_config.r=32 \
-        # ++dataset_config.normalize=true \
-        # ++model_config.encoder_projector=q-former \
-        # ++dataset_config.fix_length_audio=64 \
+        $hydra_args
+fi
+
+python /home/yxdu/hit/speech/test_werbleu.py --file $decode_log

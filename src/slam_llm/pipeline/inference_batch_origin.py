@@ -73,11 +73,6 @@ def main(kwargs: DictConfig):
 		filemode='w'
 	)
 
-	torch.distributed.init_process_group(
-        backend='nccl',
-        world_size=int(os.getenv('WORLD_SIZE', '1')),
-        rank=int(os.getenv('RANK', '0')),
-    )
 	logger = logging.getLogger()  
 	logger.setLevel(logging.INFO)
 
